@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"github.com/urfave/cli"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 )
 
 var (
-	app = cli.NewApp()
-	defaultPort = 8080
+	app            = cli.NewApp()
+	defaultPort    = 8080
 	defaultMessage = "Hello World"
 )
 
@@ -22,16 +23,33 @@ func info() {
 }
 
 func startServer(port int, message string) {
+	ip := getLocalIP()
 	log.Println("Starting server...")
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		mapping := filepath.Clean(request.URL.Path)
-		log.Printf("Client requested resource! (URL: localhost:%d%v)", port, mapping)
+		log.Printf("Client requested resource! (URL: %v:%v%v)", ip, port, mapping)
 		_, _ = writer.Write([]byte(message))
 	})
-	log.Printf("Server listens now on localhost:%d\n", port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%v", port), nil); err != nil {
+	log.Printf("Server listens now on %v:%v\n", ip, port)
+	if err := http.ListenAndServe(fmt.Sprintf("%v:%v", ip, port), nil); err != nil {
 		panic(err)
 	}
+}
+
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, address := range addrs {
+		// check the address type and if it is not a loopback the display it
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return "localhost"
 }
 
 func commandStartServer(c *cli.Context) error {
@@ -55,7 +73,7 @@ func commands() {
 				&cli.IntFlag{Name: "port", Aliases: []string{"p"}, Value: defaultPort},
 				&cli.StringFlag{Name: "message", Aliases: []string{"m", "echo", "e"}, Value: defaultMessage},
 			},
-			Action:    commandStartServer,
+			Action: commandStartServer,
 		},
 	}
 }
